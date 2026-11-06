@@ -1,0 +1,62 @@
+// ============================================================================
+// File    : bootstrap_sw.scs
+// Module  : Bootstrap Sample Switch
+// Project : 8-Bit 10 MS/s SAR ADC — 180 nm CMOS
+// Author  : akashj10sjps
+// Date    : 2026-11-06
+//
+// Description:
+//   Bootstrapped NMOS switch that presents a constant gate overdrive
+//   (VGS ≈ VDD) independent of VIN, linearizing the on-resistance and
+//   suppressing harmonic distortion to below the LSB level (< -60 dBc).
+//
+//   Operation (CLK=1 → sample, CLK=0 → hold):
+//     HOLD phase (CLK=0):
+//       CB charged to VDD across M_precharge
+//       Gate of main switch M_SW pulled to 0 (OFF)
+//     SAMPLE phase (CLK=1):
+//       CB boot-strapped: top plate connected to VIN,
+//       bottom plate driven to VIN, so VCB = VDD → VGS(M_SW) = VDD
+//       M_SW turns on with constant VGS regardless of VIN
+//
+//   Transistor sizing:
+//     M_SW       : 10/0.18  NMOS  (main switch — determined by RC bandwidth)
+//     M_precharge: 4/0.18   PMOS  (precharge CB during hold)
+//     M_boot     : 4/0.18   NMOS  (transfer VDD to gate of M_SW)
+//     M_gnd      : 2/0.18   NMOS  (pull gate of M_SW to GND during hold)
+//     CB         : 300 fF         (bootstrap capacitor — typically MOM cap)
+//
+//   On-resistance: ~100 Ω
+//   RC settling time constant: 100 Ω × 3.2 pF (DAC) ≈ 320 ps → settle
+//     to 8-bit accuracy in ~5 time constants = 1.6 ns (within 10 ns sample)
+// ============================================================================
+
+simulator lang=spectre
+
+include "models/180nm_bulk_tt.scs" section=tt
+
+subckt bootstrap_sw (OUT IN CLK CLKN VDD VSS)
+
+    // ---- Bootstrap capacitor (charge stored = VDD) --------------------------
+    CB (top_CB bot_CB) capacitor c=300f
+
+    // ---- Precharge CB to VDD during HOLD (CLK=0, CLKN=1) ------------------
+    M_preP (top_CB CLKN VDD VDD) pmos180 w=4u l=0.18u   // top plate → VDD
+    M_preN (bot_CB CLK  VSS VSS) nmos180 w=2u l=0.18u   // bot plate → VSS
+
+    // ---- Connect top plate of CB to IN during SAMPLE (CLK=1) ---------------
+    M_in   (top_CB CLK  IN  VSS) nmos180 w=4u l=0.18u
+
+    // ---- Boot gate of main switch -------------------------------------------
+    M_boot (gate_sw top_CB bot_CB VSS) nmos180 w=4u l=0.18u
+    // gate_sw = top_CB + VIN ≈ VDD + VIN (exceeds VDD — requires thick-oxide!)
+    // In 180 nm CMOS, use thick-oxide I/O transistors for gate_sw node.
+    // Replace M_boot and M_SW with i/o nmos (3.3 V device) for reliability.
+
+    // ---- Pull gate to GND during HOLD ---------------------------------------
+    M_gnd  (gate_sw CLKN VSS VSS) nmos180 w=2u l=0.18u
+
+    // ---- Main sampling switch (thick-oxide recommended) --------------------
+    M_SW   (OUT gate_sw IN  VSS) nmos180 w=10u l=0.18u
+
+ends bootstrap_sw

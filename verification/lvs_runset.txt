@@ -1,0 +1,126 @@
+# =============================================================================
+# File    : lvs_runset.txt
+# Module  : Calibre LVS Runset Configuration
+# Project : 8-Bit 10 MS/s SAR ADC — 180 nm CMOS
+# Author  : akashj10sjps
+# Date    : 2026-11-06
+#
+# Description:
+#   Calibre LVS rule deck configuration for TSMC 180 nm CMOS process.
+#   Compares the extracted layout netlist against the Spectre schematic
+#   netlist to verify equivalence.
+#
+# Usage:
+#   calibre -lvs lvs_runset.txt
+# =============================================================================
+
+// ============================================================================
+// LAYOUT SYSTEM
+// ============================================================================
+LAYOUT PATH  "../layout/sar_adc_top.gds"
+LAYOUT PRIMARY "sar_adc_top"
+LAYOUT SYSTEM GDSII
+
+// ============================================================================
+// SOURCE (SCHEMATIC) NETLIST
+// ============================================================================
+SOURCE PATH  "../schematic/sar_adc_top.scs"
+SOURCE PRIMARY "sar_adc_top"
+SOURCE SYSTEM SPICE
+
+// ============================================================================
+// LVS RESULTS
+// ============================================================================
+LVS REPORT "../results/lvs_report.txt"
+LVS REPORT OPTION S V
+MASK SVDB DIRECTORY "../results/svdb"
+
+// ============================================================================
+// RULE FILE (TSMC 180 nm)
+// ============================================================================
+// Replace with actual foundry rule file path
+LVS RULE FILE "/path/to/tsmc180/Calibre/LVS/calibre_lvs.rul"
+
+// ============================================================================
+// LAYER MAP (same as DRC)
+// ============================================================================
+LAYER MAP  1  DATATYPE 0  1     // NWELL
+LAYER MAP  3  DATATYPE 0  3     // DEEP_NWELL
+LAYER MAP  4  DATATYPE 0  4     // N+ DIFFUSION
+LAYER MAP  5  DATATYPE 0  5     // P+ DIFFUSION
+LAYER MAP  6  DATATYPE 0  6     // POLY
+LAYER MAP  7  DATATYPE 0  7     // N+ IMPLANT
+LAYER MAP  8  DATATYPE 0  8     // P+ IMPLANT
+LAYER MAP  9  DATATYPE 0  9     // CONTACT
+LAYER MAP  10 DATATYPE 0  10    // METAL1
+LAYER MAP  11 DATATYPE 0  11    // VIA1
+LAYER MAP  12 DATATYPE 0  12    // METAL2
+LAYER MAP  13 DATATYPE 0  13    // VIA2
+LAYER MAP  14 DATATYPE 0  14    // METAL3
+LAYER MAP  15 DATATYPE 0  15    // VIA3
+LAYER MAP  16 DATATYPE 0  16    // METAL4
+LAYER MAP  17 DATATYPE 0  17    // VIA4
+LAYER MAP  18 DATATYPE 0  18    // METAL5
+LAYER MAP  19 DATATYPE 0  19    // VIA5
+LAYER MAP  20 DATATYPE 0  20    // METAL6
+LAYER MAP  25 DATATYPE 0  25    // MIM_CAP
+
+// ============================================================================
+// DEVICE RECOGNITION
+// ============================================================================
+// NMOS
+LVS DEVICE nmos180 NMOS4 \
+    GATE POLY \
+    SOURCE N_DIFF \
+    DRAIN  N_DIFF \
+    BULK   PWELL
+
+// PMOS
+LVS DEVICE pmos180 PMOS4 \
+    GATE POLY \
+    SOURCE P_DIFF \
+    DRAIN  P_DIFF \
+    BULK   NWELL
+
+// MIM Capacitor
+LVS DEVICE mimcap CAP \
+    PLUS  METAL6 \
+    MINUS METAL5
+
+// Poly Resistor
+LVS DEVICE rpoly RES \
+    PLUS  POLY \
+    MINUS POLY
+
+// ============================================================================
+// CONNECTIVITY
+// ============================================================================
+CONNECT  METAL1 METAL2 BY VIA1
+CONNECT  METAL2 METAL3 BY VIA2
+CONNECT  METAL3 METAL4 BY VIA3
+CONNECT  METAL4 METAL5 BY VIA4
+CONNECT  METAL5 METAL6 BY VIA5
+CONNECT  N_DIFF METAL1 BY CONTACT
+CONNECT  P_DIFF METAL1 BY CONTACT
+CONNECT  POLY   METAL1 BY CONTACT
+
+// ============================================================================
+// LVS COMPARE OPTIONS
+// ============================================================================
+LVS COMPARE TOLERANCE 10       // 10% tolerance on W/L
+LVS FILTER UNUSED OPEN         // report unused (floating) nets
+LVS REDUCE PARALLEL MOS YES
+LVS REDUCE SERIES   MOS YES
+LVS REDUCE PARALLEL CAP YES
+LVS REDUCE SERIES   CAP YES
+
+// ============================================================================
+// POWER / GROUND NAMES
+// ============================================================================
+LVS POWER NAME "VDD" "AVDD" "DVDD" "VREFP"
+LVS GROUND NAME "VSS" "AVSS" "DVSS" "VREFN"
+
+// ============================================================================
+// PIN NAME EQUIVALENCE
+// ============================================================================
+LVS GLOBALS VDD VSS AVDD AVSS DVDD DVSS

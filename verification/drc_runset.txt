@@ -1,0 +1,102 @@
+# =============================================================================
+# File    : drc_runset.txt
+# Module  : Calibre DRC Runset Configuration
+# Project : 8-Bit 10 MS/s SAR ADC — 180 nm CMOS
+# Author  : akashj10sjps
+# Date    : 2026-11-06
+#
+# Description:
+#   Calibre DRC rule deck configuration for TSMC 180 nm CMOS process.
+#   This file specifies the layer definitions, connectivity, and DRC
+#   rule file paths required for running Calibre DRC.
+#
+# Usage:
+#   calibre -drc drc_runset.txt
+# =============================================================================
+
+// ============================================================================
+// LAYOUT SYSTEM
+// ============================================================================
+LAYOUT PATH  "../layout/sar_adc_top.gds"
+LAYOUT PRIMARY "sar_adc_top"
+LAYOUT SYSTEM GDSII
+
+// ============================================================================
+// DRC RESULTS DATABASE
+// ============================================================================
+DRC RESULTS DATABASE "../results/drc_results.db" ASCII
+DRC MAXIMUM RESULTS ALL
+DRC MAXIMUM VERTEX 4096
+
+// ============================================================================
+// RULE FILE (TSMC 180 nm)
+// ============================================================================
+// Replace with actual foundry rule file path
+DRC RULE FILE "/path/to/tsmc180/Calibre/DRC/calibre_drc.rul"
+
+// ============================================================================
+// LAYER MAP (GDS layer numbers → Calibre layer names)
+// ============================================================================
+LAYER MAP  1  DATATYPE 0  1     // NWELL
+LAYER MAP  2  DATATYPE 0  2     // PWELL (optional, triple-well)
+LAYER MAP  3  DATATYPE 0  3     // DEEP_NWELL
+LAYER MAP  4  DATATYPE 0  4     // N+ DIFFUSION
+LAYER MAP  5  DATATYPE 0  5     // P+ DIFFUSION
+LAYER MAP  6  DATATYPE 0  6     // POLY
+LAYER MAP  7  DATATYPE 0  7     // N+ IMPLANT
+LAYER MAP  8  DATATYPE 0  8     // P+ IMPLANT
+LAYER MAP  9  DATATYPE 0  9     // CONTACT
+LAYER MAP  10 DATATYPE 0  10    // METAL1
+LAYER MAP  11 DATATYPE 0  11    // VIA1
+LAYER MAP  12 DATATYPE 0  12    // METAL2
+LAYER MAP  13 DATATYPE 0  13    // VIA2
+LAYER MAP  14 DATATYPE 0  14    // METAL3
+LAYER MAP  15 DATATYPE 0  15    // VIA3
+LAYER MAP  16 DATATYPE 0  16    // METAL4
+LAYER MAP  17 DATATYPE 0  17    // VIA4
+LAYER MAP  18 DATATYPE 0  18    // METAL5
+LAYER MAP  19 DATATYPE 0  19    // VIA5
+LAYER MAP  20 DATATYPE 0  20    // METAL6 (top metal, MIM cap top plate)
+LAYER MAP  25 DATATYPE 0  25    // MIM_CAP (capacitor ID layer)
+LAYER MAP  30 DATATYPE 0  30    // PAD (bonding pad layer)
+
+// ============================================================================
+// CONNECTIVITY
+// ============================================================================
+CONNECT  METAL1 METAL2 BY VIA1
+CONNECT  METAL2 METAL3 BY VIA2
+CONNECT  METAL3 METAL4 BY VIA3
+CONNECT  METAL4 METAL5 BY VIA4
+CONNECT  METAL5 METAL6 BY VIA5
+
+// ============================================================================
+// SELECTED CHECKS (critical for analog design)
+// ============================================================================
+// Minimum width
+DRC CHECK MAP "METAL1.MIN.WIDTH"  SEVERITY ERROR
+DRC CHECK MAP "METAL2.MIN.WIDTH"  SEVERITY ERROR
+DRC CHECK MAP "METAL3.MIN.WIDTH"  SEVERITY ERROR
+DRC CHECK MAP "POLY.MIN.WIDTH"    SEVERITY ERROR
+
+// Minimum spacing
+DRC CHECK MAP "METAL1.MIN.SPACING"  SEVERITY ERROR
+DRC CHECK MAP "METAL2.MIN.SPACING"  SEVERITY ERROR
+DRC CHECK MAP "NWELL.MIN.SPACING"   SEVERITY ERROR
+
+// MIM capacitor rules
+DRC CHECK MAP "MIMCAP.MIN.WIDTH"    SEVERITY ERROR
+DRC CHECK MAP "MIMCAP.MIN.SPACING"  SEVERITY ERROR
+DRC CHECK MAP "MIMCAP.ENCLOSURE"    SEVERITY ERROR
+
+// Antenna rules (critical for MOS gate protection)
+DRC CHECK MAP "ANTENNA.METAL1"      SEVERITY WARNING
+DRC CHECK MAP "ANTENNA.METAL2"      SEVERITY WARNING
+DRC CHECK MAP "ANTENNA.POLY"        SEVERITY ERROR
+
+// ESD rules
+DRC CHECK MAP "ESD.DIODE.RULE"      SEVERITY WARNING
+
+// Density rules
+DRC CHECK MAP "METAL1.DENSITY"      SEVERITY WARNING
+DRC CHECK MAP "METAL2.DENSITY"      SEVERITY WARNING
+DRC CHECK MAP "POLY.DENSITY"        SEVERITY WARNING

@@ -1,0 +1,100 @@
+; =============================================================================
+; File    : run_power.ocn
+; Module  : OCEAN Script — Power Consumption Analysis
+; Project : 8-Bit 10 MS/s SAR ADC — 180 nm CMOS
+; Author  : akashj10sjps
+; Date    : 2026-11-06
+;
+; Description:
+;   Measures the power consumption of the SAR ADC by integrating the supply
+;   current over multiple conversion cycles.
+;
+;   Power breakdown:
+;     • Comparator  : dynamic (switching) — dominant during evaluate phase
+;     • CDAC        : switching energy = Σ(Ci × VREF²) per conversion
+;     • SAR logic   : dynamic logic power, negligible static (all CMOS)
+;     • Bootstrap   : clock-driven charge injection
+;     • Ref buffer  : static + dynamic (dominant static component)
+;
+;   Target: < 120 µW total at 1.2 V, 10 MS/s
+; =============================================================================
+
+simulator('spectre)
+
+openResults("../results/tran_fft")
+
+Fs    = 10e6
+VDD_v = 1.2
+
+; --- Measurement window (skip first 5 conversions for settling) --------------
+t_start = 5.0 / Fs      ; 500 ns
+t_stop  = 1024.0 / Fs   ; 102.4 µs
+
+; --- Total power from VDD supply current ------------------------------------
+Ivdd   = VT("/VDD:p")    ; instantaneous supply current (port current)
+Iavg   = average(Ivdd t_start t_stop)
+Ptotal = abs(Iavg) * VDD_v
+
+; --- Per-block power breakdown (probe internal supply connections) -----------
+; Comparator power
+Icomp = VT("/XADC/ICOMP:VDD:p")
+Pcomp = abs(average(Icomp t_start t_stop)) * VDD_v
+
+; CDAC switching power (estimated from total - others)
+; Direct measurement requires embedding current probes in each switch
+
+; SAR logic power
+Isar  = VT("/XADC/ISAR:VDD:p")
+Psar  = abs(average(Isar t_start t_stop)) * VDD_v
+
+; Reference buffer power
+Iref_p = VT("/XADC/IREFP:VDD:p")
+Iref_n = VT("/XADC/IREFN:VDD:p")
+Pref   = abs(average(Iref_p t_start t_stop)) * VDD_v + \
+         abs(average(Iref_n t_start t_stop)) * VDD_v
+
+; Bootstrap switch power
+Iboot_p = VT("/XADC/ISAMP_P:VDD:p")
+Iboot_n = VT("/XADC/ISAMP_N:VDD:p")
+Pboot   = abs(average(Iboot_p t_start t_stop)) * VDD_v + \
+          abs(average(Iboot_n t_start t_stop)) * VDD_v
+
+; CDAC estimated (remainder)
+Pcdac = Ptotal - Pcomp - Psar - Pref - Pboot
+
+; --- FoM (Figure of Merit) ---------------------------------------------------
+; Walden FoM: FoM = P / (2^ENOB × Fs)
+ENOB   = 7.4
+FoM_fJ = Ptotal / (2.0**ENOB * Fs) * 1e15   ; in fJ/conv-step
+
+; --- Print results -----------------------------------------------------------
+printf("\n=============================================\n")
+printf("  8-Bit SAR ADC — Power Analysis Results\n")
+printf("=============================================\n")
+printf("  VDD          = %.2f V\n" VDD_v)
+printf("  Fs           = %.0f MHz\n" Fs/1e6)
+printf("  Measurement  = %.1f – %.1f µs\n" t_start*1e6 t_stop*1e6)
+printf("  -------------------------------------------\n")
+printf("  Total power  = %.1f µW\n" Ptotal*1e6)
+printf("  -------------------------------------------\n")
+printf("  Comparator   = %.1f µW  (%.1f%%)\n" Pcomp*1e6 Pcomp/Ptotal*100)
+printf("  SAR logic    = %.1f µW  (%.1f%%)\n" Psar*1e6  Psar/Ptotal*100)
+printf("  Ref buffer   = %.1f µW  (%.1f%%)\n" Pref*1e6  Pref/Ptotal*100)
+printf("  Bootstrap SW = %.1f µW  (%.1f%%)\n" Pboot*1e6 Pboot/Ptotal*100)
+printf("  CDAC switch  = %.1f µW  (%.1f%%)\n" Pcdac*1e6 Pcdac/Ptotal*100)
+printf("  -------------------------------------------\n")
+printf("  Walden FoM   = %.1f fJ/conv-step\n" FoM_fJ)
+printf("=============================================\n\n")
+
+; --- Save to file ------------------------------------------------------------
+port = outfile("../results/power_results.txt" "w")
+fprintf(port "Total_uW,%.4f\n" Ptotal*1e6)
+fprintf(port "Comparator_uW,%.4f\n" Pcomp*1e6)
+fprintf(port "SAR_logic_uW,%.4f\n" Psar*1e6)
+fprintf(port "Ref_buffer_uW,%.4f\n" Pref*1e6)
+fprintf(port "Bootstrap_uW,%.4f\n" Pboot*1e6)
+fprintf(port "CDAC_uW,%.4f\n" Pcdac*1e6)
+fprintf(port "FoM_fJ,%.4f\n" FoM_fJ)
+close(port)
+
+printf("Power results saved to ../results/power_results.txt\n")

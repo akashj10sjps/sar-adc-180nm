@@ -1,0 +1,132 @@
+// ============================================================================
+// File    : tb_cdac.scs
+// Module  : Testbench — Segmented Charge-Redistribution DAC
+// Project : 8-Bit 10 MS/s SAR ADC — 180 nm CMOS
+// Author  : akashj10sjps
+// Date    : 2026-11-06
+//
+// Description:
+//   Verifies the CDAC linearity (DNL/INL) by sweeping all 256 codes and
+//   measuring the differential output voltage at the top plate.
+//
+//   Tests:
+//     1. Full-code DC sweep: step through codes 0-255, measure VOUTP-VOUTN
+//     2. DNL/INL extraction from measured transfer curve
+//     3. Monotonicity check (no missing codes)
+//     4. Settling time measurement for worst-case MSB transition
+//     5. Capacitor mismatch Monte Carlo (σ_DNL, σ_INL over 200 runs)
+//
+//   Setup:
+//     • Top plates initially precharged to VCM = 0.6 V
+//     • Bottom plates switched between VREFP (1.2 V) and VREFN (0 V)
+//     • Ideal switches used for code injection (no SAR logic in this TB)
+// ============================================================================
+
+simulator lang=spectre
+
+include "models/180nm_bulk_tt.scs" section=tt
+include "../schematic/cdac.scs"
+
+// ============================================================================
+// Supply and reference
+// ============================================================================
+VDD   (VDD  0) vsource dc=1.2
+VGND  (VSS  0) vsource dc=0
+VREFP (VREFP 0) vsource dc=1.2
+VREFN (VREFN 0) vsource dc=0
+
+// ============================================================================
+// Common-mode precharge (sample phase)
+// ============================================================================
+VCM  (VCM_node 0) vsource dc=0.6
+
+// ============================================================================
+// Code injection: use PWL sources to step through 256 codes
+// Lower 4 bits (binary): B3 B2 B1 B0
+// Upper 4 bits (thermometer encoded): T14..T0
+//
+// For a full sweep, each bit toggles at its binary weight period:
+//   B0 toggles every 10 ns  (LSB)
+//   B1 toggles every 20 ns
+//   B2 toggles every 40 ns
+//   B3 toggles every 80 ns
+//   Upper bits (thermometer) toggle with 4-bit boundary every 160 ns
+//   Total sweep: 256 × 10 ns = 2.56 µs
+// ============================================================================
+
+parameters Tcode=10n   // time per code step
+
+// Lower binary bits
+VB0  (B0  0) vsource type=pulse val0=0 val1=1.2 period='2*Tcode'  width='Tcode' rise=100p fall=100p
+VB0B (B0B 0) vsource type=pulse val0=1.2 val1=0 period='2*Tcode'  width='Tcode' rise=100p fall=100p
+VB1  (B1  0) vsource type=pulse val0=0 val1=1.2 period='4*Tcode'  width='2*Tcode' rise=100p fall=100p
+VB1B (B1B 0) vsource type=pulse val0=1.2 val1=0 period='4*Tcode'  width='2*Tcode' rise=100p fall=100p
+VB2  (B2  0) vsource type=pulse val0=0 val1=1.2 period='8*Tcode'  width='4*Tcode' rise=100p fall=100p
+VB2B (B2B 0) vsource type=pulse val0=1.2 val1=0 period='8*Tcode'  width='4*Tcode' rise=100p fall=100p
+VB3  (B3  0) vsource type=pulse val0=0 val1=1.2 period='16*Tcode' width='8*Tcode' rise=100p fall=100p
+VB3B (B3B 0) vsource type=pulse val0=1.2 val1=0 period='16*Tcode' width='8*Tcode' rise=100p fall=100p
+
+// Upper thermometer bits (behavioral — driven by ideal Verilog-A or PWL)
+// For simplicity, use vcvs behavioral sources with code counter
+parameters code_val=0
+VT0  (T0  0) vsource type=pulse val0=0 val1=1.2 period='32*Tcode'  width='16*Tcode' rise=100p fall=100p
+VT1  (T1  0) vsource type=pulse val0=0 val1=1.2 period='64*Tcode'  width='32*Tcode' rise=100p fall=100p delay='16*Tcode'
+VT2  (T2  0) vsource type=pulse val0=0 val1=1.2 period='96*Tcode'  width='48*Tcode' rise=100p fall=100p delay='32*Tcode'
+VT3  (T3  0) vsource type=pulse val0=0 val1=1.2 period='128*Tcode' width='64*Tcode' rise=100p fall=100p delay='48*Tcode'
+VT4  (T4  0) vsource type=pulse val0=0 val1=1.2 period='160*Tcode' width='80*Tcode' rise=100p fall=100p delay='64*Tcode'
+VT5  (T5  0) vsource type=pulse val0=0 val1=1.2 period='192*Tcode' width='96*Tcode' rise=100p fall=100p delay='80*Tcode'
+VT6  (T6  0) vsource type=pulse val0=0 val1=1.2 period='224*Tcode' width='112*Tcode' rise=100p fall=100p delay='96*Tcode'
+VT7  (T7  0) vsource type=pulse val0=0 val1=1.2 period='256*Tcode' width='128*Tcode' rise=100p fall=100p delay='112*Tcode'
+VT8  (T8  0) vsource dc=0
+VT9  (T9  0) vsource dc=0
+VT10 (T10 0) vsource dc=0
+VT11 (T11 0) vsource dc=0
+VT12 (T12 0) vsource dc=0
+VT13 (T13 0) vsource dc=0
+VT14 (T14 0) vsource dc=0
+
+// Complementary thermometer bits
+VT0B  (T0B  0) vsource type=pulse val0=1.2 val1=0 period='32*Tcode'  width='16*Tcode' rise=100p fall=100p
+VT1B  (T1B  0) vsource type=pulse val0=1.2 val1=0 period='64*Tcode'  width='32*Tcode' rise=100p fall=100p delay='16*Tcode'
+VT2B  (T2B  0) vsource type=pulse val0=1.2 val1=0 period='96*Tcode'  width='48*Tcode' rise=100p fall=100p delay='32*Tcode'
+VT3B  (T3B  0) vsource type=pulse val0=1.2 val1=0 period='128*Tcode' width='64*Tcode' rise=100p fall=100p delay='48*Tcode'
+VT4B  (T4B  0) vsource type=pulse val0=1.2 val1=0 period='160*Tcode' width='80*Tcode' rise=100p fall=100p delay='64*Tcode'
+VT5B  (T5B  0) vsource type=pulse val0=1.2 val1=0 period='192*Tcode' width='96*Tcode' rise=100p fall=100p delay='80*Tcode'
+VT6B  (T6B  0) vsource type=pulse val0=1.2 val1=0 period='224*Tcode' width='112*Tcode' rise=100p fall=100p delay='96*Tcode'
+VT7B  (T7B  0) vsource type=pulse val0=1.2 val1=0 period='256*Tcode' width='128*Tcode' rise=100p fall=100p delay='112*Tcode'
+VT8B  (T8B  0) vsource dc=1.2
+VT9B  (T9B  0) vsource dc=1.2
+VT10B (T10B 0) vsource dc=1.2
+VT11B (T11B 0) vsource dc=1.2
+VT12B (T12B 0) vsource dc=1.2
+VT13B (T13B 0) vsource dc=1.2
+VT14B (T14B 0) vsource dc=1.2
+
+// Sample/Hold control (sample first 5 ns, then hold)
+VSH  (SH  0) vsource type=pulse val0=1.2 val1=0 period='Tcode' width='5n' rise=100p fall=100p
+VSHB (SHB 0) vsource type=pulse val0=0 val1=1.2 period='Tcode' width='5n' rise=100p fall=100p
+
+// Input signal (mid-range for initial test)
+VIN  (VIN  0) vsource dc=0.6
+VINB (VINB 0) vsource dc=0.6
+
+// ============================================================================
+// DUT: Full differential CDAC
+// ============================================================================
+XDAC (VOUTP VOUTN VIN VINB
+      B3 B2 B1 B0 B3B B2B B1B B0B
+      T14 T13 T12 T11 T10 T9 T8 T7 T6 T5 T4 T3 T2 T1 T0
+      T14B T13B T12B T11B T10B T9B T8B T7B T6B T5B T4B T3B T2B T1B T0B
+      VREFP VREFN SH SHB VDD VSS) cdac_top
+
+// ============================================================================
+// Simulation control
+// ============================================================================
+// 1. Transient sweep through all 256 codes
+tran_sweep tran stop='260*Tcode' errpreset=conservative \
+    title="CDAC Full Code Sweep — DNL/INL Extraction"
+
+// 2. Monte Carlo: capacitor mismatch (200 runs)
+montecarlo mc_cap numruns=200 seed=42 donominal=yes variations=mismatch {
+    tran_mc tran stop='260*Tcode' errpreset=conservative
+}

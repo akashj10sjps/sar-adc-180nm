@@ -1,0 +1,107 @@
+// ============================================================================
+// File    : tb_sar_adc_top.scs
+// Module  : Testbench — Full SAR ADC Top-Level
+// Project : 8-Bit 10 MS/s SAR ADC — 180 nm CMOS
+// Author  : akashj10sjps
+// Date    : 2026-11-06
+//
+// Description:
+//   Full-system testbench for the 8-bit 10 MS/s SAR ADC.
+//
+//   Tests performed:
+//     1. Coherent sine-wave input → FFT → SNDR / SFDR / ENOB extraction
+//     2. Full-scale ramp → DNL / INL static linearity
+//     3. Power measurement (average over multiple conversions)
+//     4. Missing-code detection
+//
+//   FFT setup (coherent sampling):
+//     Fs     = 10 MHz  (sample rate)
+//     Nfft   = 1024    (FFT points)
+//     Fin    = Fs × M / Nfft, M = 113 (prime, no spectral leakage)
+//     Fin    ≈ 1.103515625 MHz (Nyquist compliant)
+//     Record = 1024 × 100 ns = 102.4 µs
+//
+//   Input: near-full-scale differential sinusoid (0.95 × FS)
+//     VINP = VCM + 0.5 × A × sin(2π Fin t)
+//     VINN = VCM - 0.5 × A × sin(2π Fin t)
+//     VCM  = 0.6 V, A = 0.95 × 1.2 V = 1.14 V
+// ============================================================================
+
+simulator lang=spectre
+
+include "models/180nm_bulk_tt.scs" section=tt
+include "../schematic/sar_adc_top.scs"
+
+// ============================================================================
+// Parameters
+// ============================================================================
+parameters Fs=10M Nfft=1024 M=113
+parameters Fin='Fs*M/Nfft'
+parameters VCM=0.6 Amp='0.95*1.2/2'
+parameters Tsim='Nfft/Fs + 200n'   // simulation time: 1024 samples + margin
+
+// ============================================================================
+// Supply
+// ============================================================================
+VDD   (VDD  0) vsource dc=1.2
+VGND  (VSS  0) vsource dc=0
+VREFP (VREFP 0) vsource dc=1.2
+VREFN (VREFN 0) vsource dc=0
+
+// ============================================================================
+// Clock: 10 MHz, 50% duty cycle
+// ============================================================================
+VCLK (CLK 0) vsource type=pulse val0=0 val1=1.2 period='1/Fs' \
+             width='0.5/Fs' rise=200p fall=200p delay=0
+
+// ============================================================================
+// Reset: active for first 50 ns then deasserted
+// ============================================================================
+VRST (RST 0) vsource type=pulse val0=1.2 val1=0 period='2*Tsim' \
+             width='Tsim' rise=100p fall=100p delay=50n
+
+// ============================================================================
+// Input sinusoid (coherent, near full-scale, differential)
+// ============================================================================
+VINP (VIN  0) vsource type=sine dc=VCM ampl=Amp freq=Fin
+VINN (VINB 0) vsource type=sine dc=VCM ampl=Amp freq=Fin fundphase=180
+
+// ============================================================================
+// DUT
+// ============================================================================
+XADC (VIN VINB CLK RST VREFP VREFN VDD VSS D7 D6 D5 D4 D3 D2 D1 D0) sar_adc_top
+
+// ============================================================================
+// Output load capacitance (pad + PCB trace)
+// ============================================================================
+CL7 (D7 0) capacitor c=1p
+CL6 (D6 0) capacitor c=1p
+CL5 (D5 0) capacitor c=1p
+CL4 (D4 0) capacitor c=1p
+CL3 (D3 0) capacitor c=1p
+CL2 (D2 0) capacitor c=1p
+CL1 (D1 0) capacitor c=1p
+CL0 (D0 0) capacitor c=1p
+
+// ============================================================================
+// Simulation
+// ============================================================================
+// 1. Full transient for FFT analysis
+tran_fft tran stop=Tsim errpreset=conservative maxstep='1/(20*Fs)' \
+    title="SAR ADC Full FFT — 1024 Points"
+
+// 2. Post-processing: FFT is done in OCEAN script (run_fft.ocn)
+//    SNDR = 10*log10(Psignal / (Pnoise + Pdistortion))
+//    ENOB = (SNDR - 1.76) / 6.02
+//    Expected: SNDR ≈ 46.2 dB → ENOB ≈ 7.4 bits
+
+// 3. Ramp input for static linearity (run separately)
+// tran_ramp tran stop=30u errpreset=conservative
+//    VINP_ramp type=pulse val0=0 val1=1.2 period=30u width=28u
+
+// ============================================================================
+// Save signals for post-processing
+// ============================================================================
+save VIN VINB CLK D7 D6 D5 D4 D3 D2 D1 D0 \
+     XADC.VOUTP XADC.VOUTN XADC.COMP_OUT \
+     VDD:p VREFP:p

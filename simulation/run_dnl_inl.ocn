@@ -1,0 +1,135 @@
+; =============================================================================
+; File    : run_dnl_inl.ocn
+; Module  : OCEAN Script — DNL/INL Static Linearity Extraction
+; Project : 8-Bit 10 MS/s SAR ADC — 180 nm CMOS
+; Author  : akashj10sjps
+; Date    : 2026-11-06
+;
+; Description:
+;   Post-processes the CDAC transient sweep (tb_cdac) or ramp-input ADC test
+;   to extract Differential Non-Linearity (DNL) and Integral Non-Linearity
+;   (INL) for all 256 digital output codes.
+;
+;   Method:
+;     • Code density histogram (for sine input)  — OR —
+;     • Direct step-height measurement (for ramp input)
+;     • INL = cumulative sum of DNL errors
+;     • Report max/min DNL, max/min INL, and missing codes
+;
+; Usage:
+;   In Virtuoso CIW:   load("simulation/run_dnl_inl.ocn")
+; =============================================================================
+
+simulator('spectre)
+
+Nbits  = 8
+Ncodes = 2**Nbits    ; 256
+VDD_v  = 1.2
+LSB    = VDD_v / Ncodes   ; 4.6875 mV
+
+; --- Open results from CDAC sweep test ---------------------------------------
+openResults("../results/tran_sweep")
+
+; --- Measure DAC output voltage at each code ---------------------------------
+; For tb_cdac: output voltage at each code step
+; Code timing: code k is valid at t = (k + 0.5) * Tcode + 7.5n (settling margin)
+Tcode = 10e-9
+
+dacVoltage = makeVector(Ncodes)
+for(k 0 Ncodes-1
+  let((t vout)
+    t = (k + 0.5) * Tcode + 7.5e-9
+    vout = value(VT("/VOUTP") t) - value(VT("/VOUTN") t)
+    arrayRef(dacVoltage k) = vout
+  )
+)
+
+; --- Compute ideal step size -------------------------------------------------
+; Ideal output range: V(code=0) to V(code=255)
+Vmin = arrayRef(dacVoltage 0)
+Vmax = arrayRef(dacVoltage Ncodes-1)
+idealStep = (Vmax - Vmin) / (Ncodes - 1)
+
+; --- DNL computation ---------------------------------------------------------
+; DNL[k] = (V[k] - V[k-1]) / idealStep - 1   for k = 1..255
+dnl = makeVector(Ncodes)
+arrayRef(dnl 0) = 0.0   ; DNL[0] undefined, set to 0
+for(k 1 Ncodes-1
+  let((step)
+    step = arrayRef(dacVoltage k) - arrayRef(dacVoltage k-1)
+    arrayRef(dnl k) = step / idealStep - 1.0
+  )
+)
+
+; --- INL computation (cumulative sum of DNL) ---------------------------------
+inl = makeVector(Ncodes)
+arrayRef(inl 0) = 0.0
+for(k 1 Ncodes-1
+  arrayRef(inl k) = arrayRef(inl k-1) + arrayRef(dnl k)
+)
+
+; --- Endpoint correction for INL ---------------------------------------------
+; Subtract best-fit line: INL_corrected[k] = INL[k] - (INL[255] * k / 255)
+inl_endpoint = arrayRef(inl Ncodes-1)
+for(k 0 Ncodes-1
+  arrayRef(inl k) = arrayRef(inl k) - inl_endpoint * k / (Ncodes - 1.0)
+)
+
+; --- Find extremes -----------------------------------------------------------
+dnl_max = -1e6
+dnl_min =  1e6
+inl_max = -1e6
+inl_min =  1e6
+missingCodes = 0
+
+for(k 1 Ncodes-1
+  let((d i)
+    d = arrayRef(dnl k)
+    i = arrayRef(inl k)
+    if(d > dnl_max then dnl_max = d)
+    if(d < dnl_min then dnl_min = d)
+    if(i > inl_max then inl_max = i)
+    if(i < inl_min then inl_min = i)
+    if(d < -0.99 then missingCodes = missingCodes + 1)
+  )
+)
+
+; --- Print results -----------------------------------------------------------
+printf("\n========================================\n")
+printf("  8-Bit SAR ADC — Static Linearity\n")
+printf("========================================\n")
+printf("  LSB          = %.4f mV\n" LSB*1e3)
+printf("  Ideal step   = %.4f mV\n" idealStep*1e3)
+printf("  ----------------------------------------\n")
+printf("  DNL max      = +%.3f LSB\n" dnl_max)
+printf("  DNL min      = %.3f LSB\n" dnl_min)
+printf("  INL max      = +%.3f LSB\n" inl_max)
+printf("  INL min      = %.3f LSB\n" inl_min)
+printf("  Missing codes= %d\n" missingCodes)
+printf("========================================\n\n")
+
+; --- Plot --------------------------------------------------------------------
+codeAxis = makeVector(Ncodes)
+for(k 0 Ncodes-1 arrayRef(codeAxis k) = k)
+
+newWindow()
+
+; DNL plot
+subplot(2 1 1)
+plot(codeAxis dnl ?title "DNL vs. Output Code" ?xlabel "Code" ?ylabel "DNL (LSB)")
+addMarker(0 -1.0 "Missing code threshold" ?color "red")
+
+; INL plot
+subplot(2 1 2)
+plot(codeAxis inl ?title "INL vs. Output Code (Endpoint Corrected)"
+     ?xlabel "Code" ?ylabel "INL (LSB)")
+
+; --- Save to file ------------------------------------------------------------
+port = outfile("../results/dnl_inl_results.txt" "w")
+fprintf(port "Code,DNL_LSB,INL_LSB\n")
+for(k 0 Ncodes-1
+  fprintf(port "%d,%.6f,%.6f\n" k arrayRef(dnl k) arrayRef(inl k))
+)
+close(port)
+
+printf("DNL/INL data saved to ../results/dnl_inl_results.txt\n")

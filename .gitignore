@@ -1,0 +1,50 @@
+# SAR ADC 180nm CMOS Project — .gitignore
+
+# Simulation results (large binary files)
+results/
+*.psf
+*.fsdb
+*.raw
+*.tr0
+*.ic0
+*.log
+
+# Cadence Virtuoso lock files
+*.cdslck*
+*.cdsLck*
+*.CDSLCK*
+
+# Calibre output databases
+*.db
+svdb/
+
+# GDS files (generated from layout)
+*.gds
+*.gds2
+*.oasis
+
+# Compiled/intermediate
+*.o
+*.so
+*.dll
+
+# OS-specific
+Thumbs.db
+.DS_Store
+desktop.ini
+
+# Editor/IDE
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+
+# Cadence runtime
+.cdsenv
+.cdsinit_personal
+CDS.log*
+.cadence/
+si.env
+.stimulusFile*
+artist_states/

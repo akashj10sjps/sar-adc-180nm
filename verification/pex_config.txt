@@ -1,0 +1,108 @@
+* =============================================================================
+* File    : pex_config.txt
+* Module  : Parasitic Extraction Configuration
+* Project : 8-Bit 10 MS/s SAR ADC — 180 nm CMOS
+* Author  : akashj10sjps
+* Date    : 2026-11-06
+*
+* Description:
+*   Calibre xRC (PEX) configuration for extracting parasitic R and C
+*   from the SAR ADC layout. The extracted netlist is used for post-layout
+*   simulation to validate performance with real parasitics.
+*
+* Extraction modes:
+*   RC  : Full RC extraction (capacitance + resistance)
+*   C   : Capacitance-only (faster, for initial checks)
+*   RCC : RC + coupling capacitances (most accurate, slowest)
+*
+* Usage:
+*   calibre -xrc pex_config.txt
+* =============================================================================
+
+// ============================================================================
+// LAYOUT
+// ============================================================================
+LAYOUT PATH "../layout/sar_adc_top.gds"
+LAYOUT PRIMARY "sar_adc_top"
+LAYOUT SYSTEM GDSII
+
+// ============================================================================
+// SOURCE (SCHEMATIC)
+// ============================================================================
+SOURCE PATH "../schematic/sar_adc_top.scs"
+SOURCE PRIMARY "sar_adc_top"
+SOURCE SYSTEM SPICE
+
+// ============================================================================
+// PEX OUTPUT
+// ============================================================================
+PEX NETLIST "../results/sar_adc_top_pex.scs" SPECTRE SOURCEBASED
+PEX REPORT  "../results/pex_report.txt"
+
+// ============================================================================
+// RULE FILE
+// ============================================================================
+PEX RULE FILE "/path/to/tsmc180/Calibre/PEX/calibre_pex.rul"
+
+// ============================================================================
+// EXTRACTION TYPE
+// ============================================================================
+PEX TYPE RC                    // Full RC extraction
+
+// ============================================================================
+// EXTRACTION OPTIONS
+// ============================================================================
+PEX GROUND NAME "VSS"
+PEX POWER  NAME "VDD"
+
+// Reduce extracted netlist complexity
+PEX REDUCE DISTRIBUTED RC YES
+PEX MERGE SHORTED DEVICES YES
+
+// Coupling capacitance threshold (ignore < 0.1 fF)
+PEX COUPLING CAPACITANCE THRESHOLD 0.1f
+
+// Resistance threshold (ignore < 0.5 Ω)
+PEX RESISTANCE THRESHOLD 0.5
+
+// Temperature for extraction
+PEX TEMPERATURE 27
+
+// ============================================================================
+// CRITICAL NETS (extract with higher accuracy)
+// ============================================================================
+// CDAC top-plate nodes — most sensitive to parasitics
+PEX CRITICAL NET "VOUTP"
+PEX CRITICAL NET "VOUTN"
+PEX CRITICAL NET "VIN_samp"
+PEX CRITICAL NET "VINB_samp"
+
+// Comparator input nodes
+PEX CRITICAL NET "XCOMP/INP"
+PEX CRITICAL NET "XCOMP/INN"
+
+// Reference voltage nodes
+PEX CRITICAL NET "VREFP_int"
+PEX CRITICAL NET "VREFN_int"
+
+// ============================================================================
+// LAYER MAP (same as DRC/LVS)
+// ============================================================================
+LAYER MAP  1  DATATYPE 0  1
+LAYER MAP  3  DATATYPE 0  3
+LAYER MAP  4  DATATYPE 0  4
+LAYER MAP  5  DATATYPE 0  5
+LAYER MAP  6  DATATYPE 0  6
+LAYER MAP  9  DATATYPE 0  9
+LAYER MAP  10 DATATYPE 0  10
+LAYER MAP  11 DATATYPE 0  11
+LAYER MAP  12 DATATYPE 0  12
+LAYER MAP  13 DATATYPE 0  13
+LAYER MAP  14 DATATYPE 0  14
+LAYER MAP  15 DATATYPE 0  15
+LAYER MAP  16 DATATYPE 0  16
+LAYER MAP  17 DATATYPE 0  17
+LAYER MAP  18 DATATYPE 0  18
+LAYER MAP  19 DATATYPE 0  19
+LAYER MAP  20 DATATYPE 0  20
+LAYER MAP  25 DATATYPE 0  25

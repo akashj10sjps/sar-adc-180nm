@@ -1,0 +1,227 @@
+// ============================================================================
+// File    : 180nm_bulk_tt.scs
+// Module  : MOSFET Models — 180 nm Bulk CMOS (Typical-Typical Corner)
+// Project : 8-Bit 10 MS/s SAR ADC — 180 nm CMOS
+// Author  : akashj10sjps
+// Date    : 2026-11-06
+//
+// Description:
+//   Placeholder transistor model file for the 180 nm bulk CMOS process.
+//   In production, replace this file with the foundry-provided BSIM3v3
+//   or BSIM4 model library (e.g., TSMC CLN018 or UMC L180).
+//
+//   This stub defines the model names used throughout the SAR ADC design
+//   so that the netlists can be syntax-checked without the actual PDK.
+//
+// Process corners available (section parameter):
+//   tt  : Typical NMOS, Typical PMOS (nominal)
+//   ff  : Fast NMOS, Fast PMOS
+//   ss  : Slow NMOS, Slow PMOS
+//   sf  : Slow NMOS, Fast PMOS
+//   fs  : Fast NMOS, Slow PMOS
+//
+// Temperature range: -40°C to 125°C
+// Supply voltage nominal: 1.8 V (core), 3.3 V (I/O)
+// Thin-oxide VT nominal: NMOS ~0.5 V, PMOS ~-0.5 V
+// ============================================================================
+
+simulator lang=spectre
+
+library 180nm_models
+
+section tt
+
+// ============================================================================
+// Core NMOS (thin oxide, 1.8 V)
+// ============================================================================
+model nmos180 nmos level=49 version=3.3 \
+    tnom=27 \
+    toxe=4.1e-9 \
+    toxp=3.5e-9 \
+    toxm=4.1e-9 \
+    epsrox=3.9 \
+    wint=5e-9 \
+    lint=5e-9 \
+    vth0=0.5 \
+    k1=0.6 \
+    k2=-0.1 \
+    k3=80 \
+    dvt0=0 \
+    dvt1=0 \
+    dvt2=0 \
+    nlx=1.74e-7 \
+    w0=0 \
+    k3b=0.6 \
+    vsat=1.5e5 \
+    ua=-1.4e-9 \
+    ub=2.3e-18 \
+    uc=-4.6e-11 \
+    rdsw=200 \
+    prwb=0 \
+    prwg=0 \
+    wr=1 \
+    u0=350 \
+    a0=1 \
+    ags=0.2 \
+    a1=0 \
+    a2=1 \
+    b0=0 \
+    b1=0 \
+    voff=-0.1 \
+    nfactor=1.5 \
+    cit=0 \
+    cdsc=0 \
+    cdscb=0 \
+    cdscd=0 \
+    eta0=0.08 \
+    etab=-0.07 \
+    dsub=0.56 \
+    pclm=1.3 \
+    pdiblc1=0.39 \
+    pdiblc2=0.0086 \
+    pdiblcb=-0.1 \
+    drout=0.56 \
+    pscbe1=4.24e8 \
+    pscbe2=1e-5 \
+    pvag=0.1 \
+    delta=0.01 \
+    alpha0=0 \
+    beta0=30 \
+    // Capacitance parameters
+    cgso=2.5e-10 \
+    cgdo=2.5e-10 \
+    cgbo=1e-12 \
+    cgdl=2e-10 \
+    cgsl=2e-10 \
+    ckappa=0.6 \
+    cf=1.2e-10 \
+    clc=1e-7 \
+    cle=0.6 \
+    // Junction parameters
+    cj=1e-3 \
+    mj=0.5 \
+    pb=0.8 \
+    cjsw=3e-10 \
+    mjsw=0.33 \
+    pbsw=0.8 \
+    cjswg=5e-10 \
+    mjswg=0.33 \
+    pbswg=0.8 \
+    // Noise parameters
+    noia=9.9e18 \
+    noib=2.4e3 \
+    noic=-1.4e-12 \
+    em=4.1e7 \
+    ef=1.0 \
+    // Flicker noise
+    af=1 \
+    kf=2.5e-27
+
+// ============================================================================
+// Core PMOS (thin oxide, 1.8 V)
+// ============================================================================
+model pmos180 pmos level=49 version=3.3 \
+    tnom=27 \
+    toxe=4.1e-9 \
+    toxp=3.5e-9 \
+    toxm=4.1e-9 \
+    epsrox=3.9 \
+    wint=5e-9 \
+    lint=5e-9 \
+    vth0=-0.5 \
+    k1=0.55 \
+    k2=-0.1 \
+    k3=80 \
+    dvt0=0 \
+    dvt1=0 \
+    dvt2=0 \
+    nlx=1e-7 \
+    w0=0 \
+    k3b=0.4 \
+    vsat=1.2e5 \
+    ua=-1.4e-9 \
+    ub=2.3e-18 \
+    uc=-4.6e-11 \
+    rdsw=400 \
+    prwb=0 \
+    prwg=0 \
+    wr=1 \
+    u0=120 \
+    a0=1 \
+    ags=0.2 \
+    a1=0 \
+    a2=1 \
+    b0=0 \
+    b1=0 \
+    voff=-0.1 \
+    nfactor=1.5 \
+    cit=0 \
+    cdsc=0 \
+    cdscb=0 \
+    cdscd=0 \
+    eta0=0.08 \
+    etab=-0.07 \
+    dsub=0.56 \
+    pclm=1.3 \
+    pdiblc1=0.39 \
+    pdiblc2=0.0086 \
+    pdiblcb=-0.1 \
+    drout=0.56 \
+    pscbe1=4.24e8 \
+    pscbe2=1e-5 \
+    pvag=0.1 \
+    delta=0.01 \
+    alpha0=0 \
+    beta0=30 \
+    // Capacitance parameters
+    cgso=2.5e-10 \
+    cgdo=2.5e-10 \
+    cgbo=1e-12 \
+    cgdl=2e-10 \
+    cgsl=2e-10 \
+    ckappa=0.6 \
+    cf=1.2e-10 \
+    clc=1e-7 \
+    cle=0.6 \
+    // Junction parameters
+    cj=1.2e-3 \
+    mj=0.5 \
+    pb=0.85 \
+    cjsw=3e-10 \
+    mjsw=0.33 \
+    pbsw=0.85 \
+    cjswg=5e-10 \
+    mjswg=0.33 \
+    pbswg=0.85 \
+    // Noise parameters
+    noia=9.9e18 \
+    noib=2.4e3 \
+    noic=-1.4e-12 \
+    em=4.1e7 \
+    ef=1.0 \
+    af=1 \
+    kf=5e-27
+
+endsection tt
+
+// ============================================================================
+// Additional corners (stubs — populate from foundry PDK)
+// ============================================================================
+section ff
+  // Fast-Fast: VTH reduced, mobility increased
+  // Copy tt models and adjust vth0, u0, etc. per foundry data
+endsection ff
+
+section ss
+  // Slow-Slow: VTH increased, mobility decreased
+endsection ss
+
+section sf
+  // Slow NMOS, Fast PMOS
+endsection sf
+
+section fs
+  // Fast NMOS, Slow PMOS
+endsection fs
+
+endlibrary 180nm_models

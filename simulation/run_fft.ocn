@@ -1,0 +1,158 @@
+; =============================================================================
+; File    : run_fft.ocn
+; Module  : OCEAN Script — FFT / SNDR / ENOB Extraction
+; Project : 8-Bit 10 MS/s SAR ADC — 180 nm CMOS
+; Author  : akashj10sjps
+; Date    : 2026-11-06
+;
+; Description:
+;   Post-simulation OCEAN script that:
+;     1. Opens the transient results from tb_sar_adc_top
+;     2. Reconstructs the digital output code from D[7:0]
+;     3. Applies a Hanning window
+;     4. Computes 1024-point FFT
+;     5. Extracts SNDR, SFDR, THD, and ENOB
+;     6. Plots the output spectrum and prints results
+;
+; Usage:
+;   In Virtuoso CIW:   load("simulation/run_fft.ocn")
+;   Or from command line: ocean -restore simulation/run_fft.ocn
+; =============================================================================
+
+; --- Configuration -----------------------------------------------------------
+simulator('spectre)
+design("../testbench/tb_sar_adc_top.scs")
+
+Fs    = 10e6          ; Sample rate
+Nfft  = 1024          ; FFT length
+M     = 113           ; Input bin number (prime)
+Fin   = Fs * M / Nfft ; Input frequency
+VDD_v = 1.2           ; Full-scale voltage
+Nbits = 8             ; ADC resolution
+
+; --- Open simulation results -------------------------------------------------
+openResults("../results/tran_fft")
+
+; --- Reconstruct digital output code -----------------------------------------
+; Sample D[7:0] at the rising edge of CLK (center of conversion completion)
+; Use the "value at time" approach: sample each bit at t = n/Fs + 80ns (settling)
+
+procedure(reconstructCode(n)
+  let((t d7 d6 d5 d4 d3 d2 d1 d0 code)
+    t = n / Fs + 80e-9   ; sample 80 ns after CLK rising edge
+    d7 = if(value(VT("/D7") t) > 0.6 then 128 else 0)
+    d6 = if(value(VT("/D6") t) > 0.6 then 64  else 0)
+    d5 = if(value(VT("/D5") t) > 0.6 then 32  else 0)
+    d4 = if(value(VT("/D4") t) > 0.6 then 16  else 0)
+    d3 = if(value(VT("/D3") t) > 0.6 then 8   else 0)
+    d2 = if(value(VT("/D2") t) > 0.6 then 4   else 0)
+    d1 = if(value(VT("/D1") t) > 0.6 then 2   else 0)
+    d0 = if(value(VT("/D0") t) > 0.6 then 1   else 0)
+    code = d7 + d6 + d5 + d4 + d3 + d2 + d1 + d0
+    code
+  )
+)
+
+; --- Build code array --------------------------------------------------------
+codeArray = makeVector(Nfft)
+for(n 0 Nfft-1
+  arrayRef(codeArray n) = reconstructCode(n + 2)   ; skip first 2 samples (reset)
+)
+
+; --- Apply Hanning window ----------------------------------------------------
+windowedArray = makeVector(Nfft)
+for(n 0 Nfft-1
+  let((w)
+    w = 0.5 * (1.0 - cos(2.0 * 3.14159265 * n / Nfft))
+    arrayRef(windowedArray n) = arrayRef(codeArray n) * w
+  )
+)
+
+; --- Compute FFT (using built-in dft function) -------------------------------
+spectrum = dft(windowedArray)
+
+; --- Compute magnitude in dB (normalized to full scale) ----------------------
+magdB = makeVector(Nfft/2)
+for(k 0 Nfft/2-1
+  let((re im mag)
+    re = real(arrayRef(spectrum k))
+    im = imag(arrayRef(spectrum k))
+    mag = sqrt(re*re + im*im) / (Nfft / 2)
+    arrayRef(magdB k) = 20.0 * log10(mag / (2**Nbits) + 1e-15)
+  )
+)
+
+; --- Extract signal, noise, and distortion power ----------------------------
+Psignal = 0.0
+Pnoise  = 0.0
+Pdist   = 0.0
+harmonics = list(2*M 3*M 4*M 5*M 6*M 7*M)  ; harmonic bin indices
+
+; Signal bin ± 1 (leakage)
+for(k M-1 M+1
+  Psignal = Psignal + abs(arrayRef(spectrum k))^2
+)
+
+; Harmonic distortion bins
+foreach(h harmonics
+  let((hbin)
+    hbin = mod(h Nfft/2)   ; fold aliases
+    if(hbin > 0 && hbin < Nfft/2 then
+      Pdist = Pdist + abs(arrayRef(spectrum hbin))^2
+    )
+  )
+)
+
+; Noise: everything else (excluding DC and signal/harmonics)
+for(k 1 Nfft/2-1
+  let((isSig isHarm)
+    isSig = (k >= M-1 && k <= M+1)
+    isHarm = member(k harmonics)
+    if(!isSig && !isHarm then
+      Pnoise = Pnoise + abs(arrayRef(spectrum k))^2
+    )
+  )
+)
+
+; --- Compute metrics ---------------------------------------------------------
+SNDR = 10.0 * log10(Psignal / (Pnoise + Pdist))
+ENOB = (SNDR - 1.76) / 6.02
+THD  = 10.0 * log10(Pdist / Psignal)
+SFDR_val = -1.0 * min(foreach(mapcar h harmonics 20*log10(abs(arrayRef(spectrum mod(h Nfft/2)))/abs(arrayRef(spectrum M)))))
+
+; --- Print results -----------------------------------------------------------
+printf("\n========================================\n")
+printf("  8-Bit SAR ADC — FFT Analysis Results\n")
+printf("========================================\n")
+printf("  Fs     = %.2f MHz\n" Fs/1e6)
+printf("  Fin    = %.6f MHz (bin %d)\n" Fin/1e6 M)
+printf("  Nfft   = %d\n" Nfft)
+printf("  ----------------------------------------\n")
+printf("  SNDR   = %.2f dB\n" SNDR)
+printf("  ENOB   = %.2f bits\n" ENOB)
+printf("  THD    = %.2f dB\n" THD)
+printf("  SFDR   = %.2f dB\n" SFDR_val)
+printf("========================================\n\n")
+
+; --- Plot spectrum -----------------------------------------------------------
+freqAxis = makeVector(Nfft/2)
+for(k 0 Nfft/2-1
+  arrayRef(freqAxis k) = k * Fs / Nfft / 1e6   ; MHz
+)
+
+newWindow()
+plot(freqAxis magdB ?title "SAR ADC Output Spectrum (1024-pt FFT)"
+     ?xlabel "Frequency (MHz)" ?ylabel "Magnitude (dBFS)")
+addTitle(sprintf(nil "SNDR=%.1f dB  ENOB=%.1f bits  SFDR=%.1f dB" SNDR ENOB SFDR_val))
+
+; --- Save results to file ----------------------------------------------------
+port = outfile("../results/fft_results.txt" "w")
+fprintf(port "SNDR_dB,%.4f\n" SNDR)
+fprintf(port "ENOB_bits,%.4f\n" ENOB)
+fprintf(port "THD_dB,%.4f\n" THD)
+fprintf(port "SFDR_dB,%.4f\n" SFDR_val)
+fprintf(port "Fs_MHz,%.4f\n" Fs/1e6)
+fprintf(port "Fin_MHz,%.6f\n" Fin/1e6)
+close(port)
+
+printf("Results saved to ../results/fft_results.txt\n")

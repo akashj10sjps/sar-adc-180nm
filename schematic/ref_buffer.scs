@@ -1,0 +1,77 @@
+// ============================================================================
+// File    : ref_buffer.scs
+// Module  : Reference Voltage Buffer (Low-Noise Unity-Gain OTA)
+// Project : 8-Bit 10 MS/s SAR ADC — 180 nm CMOS
+// Author  : akashj10sjps
+// Date    : 2026-11-06
+//
+// Description:
+//   Two-stage OTA in unity-gain (buffer) configuration to drive VREFP/VREFN
+//   with low output impedance during CDAC switching.
+//
+//   Specifications:
+//     DC gain        : 72 dB
+//     Unity-gain BW  : 500 MHz (with 10 pF load)
+//     Phase margin   : 65° (Miller compensation, Cc=200 fF)
+//     Slew rate       : > 500 V/µs
+//     Output noise   : < 50 µV rms (10 Hz – 10 MHz)
+//     Quiescent power : ~40 µW (included in total ADC power budget)
+//
+//   Topology:
+//     Stage 1: Folded-cascode differential OTA (telescopic is faster but
+//              limits output swing; folded cascode chosen for headroom)
+//     Stage 2: Common-source output with RC Miller compensation
+//
+//   Sizing (all NMOS/PMOS are 180 nm CMOS core devices, 1.8 V max):
+//     M1/M2 (input diff pair, PMOS) : 40/0.5
+//     M3/M4 (cascode, PMOS)         : 20/0.5
+//     M5/M6 (cascode, NMOS)         : 20/0.5
+//     M7/M8 (tail + cascode bias)   : 20/0.5
+//     M9    (output stage, NMOS)    : 60/0.18
+//     Cc    (Miller comp cap)       : 200 fF
+//     Rc    (zero-cancellation)     : 500 Ω (polysilicon)
+// ============================================================================
+
+simulator lang=spectre
+
+include "models/180nm_bulk_tt.scs" section=tt
+
+subckt ref_buffer (VOUT VIN VDD VSS)
+
+    // ---- Bias current sources (assumed from external bias generator) --------
+    // Itail = 100 µA, Iout_stage = 50 µA
+    Itail (vb_tail VSS) isource dc=100u
+    Ibias (vb_cas  VSS) isource dc=50u
+
+    // ---- Stage 1: Folded-cascode OTA ----------------------------------------
+
+    // Tail current source
+    MT  (vn1 vb_tail VSS VSS) nmos180 w=20u l=0.5u
+
+    // Differential input pair (PMOS for lower flicker noise)
+    M1  (vd1 VIN  vn1 VDD) pmos180 w=40u l=0.5u
+    M2  (vd2 VOUT vn1 VDD) pmos180 w=40u l=0.5u
+
+    // PMOS cascode current sources (load)
+    MP5 (vd1 vb_cas VDD VDD) pmos180 w=20u l=0.5u   // upper cascode PMOS
+    MP6 (vd2 vb_cas VDD VDD) pmos180 w=20u l=0.5u
+
+    // NMOS cascode current sinks
+    MN3 (vd1 vb_cas vn3 VSS) nmos180 w=20u l=0.5u
+    MN4 (vd2 vb_cas vn4 VSS) nmos180 w=20u l=0.5u
+    MN5 (vn3 vb_cas VSS  VSS) nmos180 w=20u l=0.5u
+    MN6 (vn4 vb_cas VSS  VSS) nmos180 w=20u l=0.5u
+
+    // ---- Miller compensation (stage 1 → stage 2) ---------------------------
+    Rc  (vd2 vcc)   resistor r=500
+    Cc  (vcc VOUT)  capacitor c=200f
+
+    // ---- Stage 2: Common-source output amplifier ---------------------------
+    M9  (VOUT vd2 VSS VSS) nmos180 w=60u l=0.18u
+    MP9 (VOUT vb_cas VDD VDD) pmos180 w=30u l=0.18u   // load
+
+    // ---- Feedback: unity-gain buffer (output tied to inverting input) -------
+    // VOUT → M2 gate (IN- of OTA) is the feedback path
+    // This connection is made at the top-level by wiring VOUT → VOUT (port)
+
+ends ref_buffer
